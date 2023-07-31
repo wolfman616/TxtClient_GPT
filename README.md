@@ -10,4 +10,5 @@ A simple selfcontained windows common controls gui frontend for chatGPT
 
 ![image](https://github.com/wolfman616/TxtClient_GPT/assets/62726599/94f353c7-7a87-44dc-ba31-c5c40c9ddcbc)
 
+![image](https://github.com/wolfman616/TxtClient_GPT/assets/62726599/44c53ff1-5672-4b1a-aa1e-6f029a842da4)
 
