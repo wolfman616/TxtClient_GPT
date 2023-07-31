@@ -65,7 +65,7 @@ msgbox % copiedthis
 
 	}
 
-	switch,umsg {
+	switch,umsg { 
 		case,513 : mousegetpos,xs,ys
 			sleep 200, mousegetpos,xn,yn
 			if(xn!=xs||yn!=Ys) {
@@ -77,7 +77,17 @@ msgbox % copiedthis
 	} 	;tooltip % wparam "`n " lparam "`n"  umsg
 }
 
-
+^+v::
+string:=","
+if(instr(clipboard,chr(10))) { 
+	Loop,Parse,clipboard,`n 
+	{
+		string.= a_loopfield ",`n"
+		count++
+		}
+		GuiControl,, % InputQuestion,% string
+GuiControl, Choose, r1,ahk_id   %InputQuestion%	
+}return
 
 
 
@@ -122,7 +132,16 @@ HeaderTitles.="|Settings"
 Gui,Add,Tab3 ,% "w448 h" Gui_main_h-38,% HeaderTitles 
 
 Gui,Tab,% "Main" ;Gui,Add,Text,,Question to ChatGPT:
-Gui,Add,Edit, vInputQuestion hwndInputQuestion x20 y44 h28 w%gui_question_W% r1,
+if(opt_richtext_question) {
+	hModuleME := DllCall("kernel32.dll\LoadLibrary", Str,"msftedit.dll", Ptr)
+	vPos := (!vShowBuiltIn1 && !vShowBuiltIn2) ? "y30" : "" ;make room for toolbar if needed
+	Gui, Add, Custom, % vPos " ClassRICHEDIT50W  vInputQuestion hwndInputQuestion x20 y44 h28 w" gui_question_W
+	ControlSetText, RICHEDIT50W1, % "RICH 1", % "ahk_id " hGui
+}	else {
+	Gui,Add,Edit, vInputQuestion hwndInputQuestionhwnd x20 y44 h28 w%gui_question_W% r2
+	GuiControl, Choose, r4,ahk_id   %InputQuestion%	
+
+}
 if(Opt_fontlarge)
 	Gui,Font,s12
 if(opt_multilang) {
@@ -146,7 +165,7 @@ if(Opt_fontlarge)
 	Gui,Font, s12
 
 Gui,Tab,% "Main"
-Gui,Add,Button,% "xs ys gButtonClick x" 24 + gui_question_W " y44 w54 h30 default Section",% "Ask..."
+Gui,Add,Button,% "xs ys gButtonClick x" 24 + gui_question_W " y44 w54 h48 default Section",% "Ask..."
 
 if(opt_multilang)
 	Gui,Add,Button,ys gTranslateBeforeAsk w200 h30,% "Translate before Ask"
@@ -155,9 +174,17 @@ Gui,Add,Button,ys gReloadApp +hwndreloadbutthwnd w68 h30, % "Reload"
 guicontrol,hide,% reloadbutthwnd
 Gui,Add,Text,x24 y80 vAnswer +hwndAnswerHeadingHwnd,% "Answer..."
 guicontrol,Hide,% AnswerHeadingHwnd
-Gui,Add,Edit,vAnswerEdit +hwndAnswerEdithwnd x20 y80 r10 w%GUI_answer_W%
+
+if(opt_richtext_answer) {
+	hModuleME := DllCall("kernel32.dll\LoadLibrary", Str,"msftedit.dll", Ptr)
+	vPos := (!vShowBuiltIn1 && !vShowBuiltIn2) ? "y30" : "" ;make room for toolbar if needed
+	Gui, Add, Custom, % vPos " ClassRICHEDIT50W  vAnswerEdit hwndAnswerEdithwnd x20 y80 r10 w%GUI_answer_W%" gui_answer_W
+	ControlSetText, RICHEDIT50W1, % "RICH 1", % "ahk_id " hGui
+}	else 	Gui,Add,Edit, vAnswerEdit hwndInputanswer x20 y96 r9 w%GUI_answer_W% r2
+
+;Gui,Add,Edit,vAnswerEdit +hwndAnswerEdithwnd x20 y80 r10 w%GUI_answer_W%
 Gui,Add,Text,vTextTranslate,% "Translate"
-Gui,Add,Edit,vAnswerEdit2 +hwndAnswerEdithwnd2 x20 y80 r10 w%GUI_answer_W%
+Gui,Add,Edit,vAnswerEdit2 +hwndAnswerEdithwnd2 x20 y96 r9 w%GUI_answer_W%
 
 if(opt_seejson) {
 	Gui,Tab,% "TranslateJson"
@@ -172,8 +199,6 @@ if(opt_SeeResultJson) {
 ;	Gui,Show,% "x100 y" (A_ScreenHeight/10), % a_scriptname " - GuiHWND: " hGUIA
 } return,
 
-return,
-
 
 ShowMainGui:
 mousegetpos,x_,y_
@@ -182,7 +207,6 @@ if(!api_key)
 	msgbox,% "please enter api key in the settings tab."
 Gui,PleaseWait:Show,Na Hide
 
-EM_SETCUEBANNER(InputQuestion, a_space "to ChatGPT3.5")
 
 ;GuiControl,hide,ToggleListView
 
@@ -196,6 +220,7 @@ if(opt_multilang)
 ;GuiControl,Move,AnswerEdit2, % "y+140 h" 500 
 ;GuiControl, hide, AnswerEdit2
 GuiControl,hide,TextTranslate ; https://ahkde.github.io/docs/v1/lib/GuiControl.htm
+EM_SETCUEBANNER(InputQuestionhwnd, a_space "to ChatGPT3.5")
 Return,
 
 ;-=====================================================================================================================================
@@ -206,6 +231,7 @@ onexit,exit
 ;onmessage(0x202,"WM_LBUTTDOWNUP")
 OnMessage(0x6,"onActiv8")
 OnMessage(0x404,"AHK_NOTIFYICON")
+return,
 
 StatusBarInit:
 init:= 0, inc:= gui_main_w -28
@@ -220,19 +246,15 @@ EM_SETCUEBANNER(HWND, Text) {	;EM_SETCUEBANNER-0x1501: msdn.microsoft.com/en-us/
 }
 
 RadioGroupSelection:
-return
+return,
+
 ToggleListView:
-return
-ReloadApp:
-Gui, Submit, NoHide
-reload
-return
+return,
+
 
 TranslateBeforeAsk:
-Gui, Submit, NoHide
-
-GuiControl,, InputQuestion, % InputQuestionOLD
-
+Gui,Submit,NoHide
+GuiControl,,InputQuestion,% InputQuestionOLD
 return,
 
 ButtonClick:
@@ -242,6 +264,8 @@ Gui,PleaseWait:Show,% "x300 y" (A_ScreenHeight/2), % AttemptNo
 AttemptNo := 1
 jsonY := thisJson(InputQuestion)
 ; Send the request and get the response
+clipboard:=jsonY
+msgbox
 curl.Send(jsonY)
 result := curl.ResponseText
 test := result
@@ -262,10 +286,10 @@ If test contains error
 If test =
 {
 	AttemptNo++
-	GuiControl,, AnswerEdit2, error
-	fileappend, % error "`n", % a_scriptdir "\chatGPT UI - mini - error B.txt"
-	msgbox,, % "A_LineNumber. " A_LineNumber " - error B", % test, 5
-	sleep, 1000
+	GuiControl,,AnswerEdit2, error
+	fileappend,% error "`n", % a_scriptdir "\chatGPT UI - mini - error B.txt"
+	msgbox,,% "A_LineNumber. " A_LineNumber " - error B", % test,5
+	sleep,1000
 	GuiControl, PleaseWait:, TextB, % AttemptNo
 	GoTo, ButtonClick
 }
@@ -366,6 +390,12 @@ fileappend, % thisLV_ADD "`n", % a_scriptdir "\chatGPT UI - mini - history-FULL.
 fileappend, % this_LV_Line "`n", % a_scriptdir "\chatGPT UI - mini - this_LV_Line.txt"
 return,
 
+ReloadApp:
+Gui,Submit,NoHide
+menu,tray,noicon
+reload,
+return
+
 ttStop:
 toolTip,
 return
@@ -377,40 +407,39 @@ ExitApp
 ;ahkObj := JsonToAHK(json)
 ;MsgBox, % ahkObj["Digital", 3, "key"]
 
-JsonToAHK(json, rec := false) {
-   static doc := ComObjCreate("htmlfile")
-         , __ := doc.write("<meta http-equiv=""X-UA-Compatible"" content=""IE=9"">")
-         , JS := doc.parentWindow
-   if !rec
-      obj := %A_ThisFunc%(JS.eval("(" . json . ")"), true)
-   else if !IsObject(json)
-      obj := json
-   else if JS.Object.prototype.toString.call(json) == "[object Array]" {
-      obj := []
-      Loop % json.length
-         obj.Push( %A_ThisFunc%(json[A_Index - 1], true) )
-   }
-   else {
-      obj := {}
-      keys := JS.Object.keys(json)
-      Loop % keys.length {
-         k := keys[A_Index - 1]
-         obj[k] := %A_ThisFunc%(json[k], true)
-      }
-   }
-   Return obj
+JsonToAHK(json, rec:= false) {
+	static doc:= ComObjCreate("htmlfile")
+				, __:= doc.write("<meta http-equiv=""X-UA-Compatible"" content=""IE=9"">")
+				, JS:= doc.parentWindow
+	if(!rec)
+		obj:= %A_ThisFunc%(JS.eval("(" . json . ")"), true)
+	else,if(!IsObject(json))
+		obj:= json
+	else,if JS.Object.prototype.toString.call(json) == "[object Array]" {
+		obj := []
+		Loop % json.length
+				obj.Push( %A_ThisFunc%(json[A_Index - 1], true) )
+	} else {
+		obj:= {}
+		keys:= JS.Object.keys(json)
+		Loop,% keys.length {
+				k:= keys[A_Index -1]
+				obj[k]:= %A_ThisFunc%(json[k], true)
+		}
+	}
+	Return,obj
 }
 
 thisJson(ByRef Search_Input := "PROMPT") {
  ; Build the JSON payload
- 	Search_Input := RegExReplace(Search_Input, "\""", """""")
- 	Search_Input := RegExReplace(Search_Input, "\n", "``n")
+ 	Search_Input:= RegExReplace(Search_Input, "\""", """""")
+ 	Search_Input:= RegExReplace(Search_Input, "\n", "``n")
  	jsonY=
 	(
 		{
 		    "prompt": "%Search_Input%",
-		    "max_tokens": 4000,
-		    "temperature": 0.1
+		    "max_tokens": 4011,
+		    "temperature": 0.9
 		}
 	)
 	Return jsonY
@@ -702,12 +731,15 @@ reload() {
 } 
 
 Varz:
-global r_pid,copiedthis, api_key, AnswerEdithwnd, GUI_answer_W, regbase, Gui_Main_W, xs, ys, smicon64, lgicon64, opt_multilang, opt_tokens, opt_SpawnOnMouse, gui_question_W, EDIT:=65304, open:=65407, Suspend:=65305, PAUSE:=65306, exit:=6530, SbarhWnd
+global r_pid,copiedthis, api_key, AnswerEdithwnd,InputQuestion,InputQuestionhwnd, GUI_answer_W, regbase, Gui_Main_W, xs, ys, smicon64, lgicon64, opt_multilang, opt_tokens, opt_SpawnOnMouse, gui_question_W, EDIT:=65304, open:=65407, Suspend:=65305, PAUSE:=65306, exit:=6530, SbarhWnd
 ,	r_pid:= DllCall("GetCurrentProcessId"), hOOkz
 , icob64:= []
   
 RegBase:= "HKEY_CURRENT_USER\SOFTWARE\_ch@_GP-Tizzle"
+gosub,b64icons_
+return,
 
+b64icons_:
 icob64["smicon64"]:="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"
 
 icob64["lgicon64"]:="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"
