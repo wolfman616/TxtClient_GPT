@@ -1,4 +1,4 @@
-﻿#NoEnv ; (MW:2023) (MW:2023) TxtClient_GPT
+﻿#NoEnv ; (MW:2023) (MW:2023) TxtClient_GPT ; I use 144dpi this may be the only DPI working as intended/ This is untested.
 #NoTrayicon
 
 ListLines,Off
@@ -23,49 +23,96 @@ loop,parse,% "VarZ,Menus,Hookinit,Optionz,Dimz,RegRead,OnMessages,Main,StatusBar
 return,
 
 Optionz:
-opt_SpawnOnMouse:= true
-opt_SeeResultJson:= false
-opt_multilang:= false
-opt_tokens:= false
+Opt_Appear_Transition	:= " slide vneg "
+Opt_Appear_TransitionDurMs:= 300
+Opt_Hide_Transition		:= " Slide Vpos "
+Opt_Hide_TransitionDurMs	:= 200
+
+Opt_GuiTrans:= True
+Opt_SpawnOnMouse:= True
+Opt_MultiLang:= False
+Opt_SeeResultJson:= False
+
+; Gpt json payload stuff ;
+Opt_Tokens:= False
+Opt_MaxTokens:= 4011
+Opt_Temeperature:= 0.5
 return,
 
 Dimz:
-gui_question_W:= 380
-GUI_answer_W:= 437
-Gui_Main_W:= 470
-Gui_main_h:= 320
+Const_OtherGuiMargin	:= 10 ; other system metrics for window frame dimension approximation
+, Opt_GuiQuestionLines:= "r2"
+, Opt_GuiTabMarginSz	:= 18
+, opt_GuiTabTopMargin := 20
+, Opt_Gui_Main_W			:= 450
+, Opt_Gui_Question_W	:= Opt_Gui_Main_W -100
+, Opt_Gui_Main_H			:= 320
+, Opt_GUI_Answer_W		:= Opt_Gui_Main_W - Const_OtherGuiMargin -Opt_GuiTabMarginSz -24
+, Opt_Guitab_W				:= Opt_Gui_Main_W -( 2*opt_GuiTabMarginSz ) -Const_OtherGuiMargin
 return,
 
+ShowMainGui:
+mousegetpos,x_,y_
+( x_> (a_screenwidth -Opt_Gui_Main_W-80))? x_-= Opt_Gui_Main_W-120 : ( x_<64 ? x_:= 120)
+
+( y_> (a_screenheight -Opt_Gui_Main_h-80))? x_-= Opt_Gui_Main_W-120 : ( y_<64 ? y_:= 120)
+
+winmove(hGuiA,x_ -(Opt_Gui_Main_W/2),y_ -(Opt_Gui_Main_H/5))
+
+Gui,Show,% (Opt_SpawnOnMouse? ("x" . x_ -(Opt_Gui_Main_W/2) . " y" . y_ -(Opt_Gui_Main_H/5)):())  " w" . Opt_Gui_Main_W . " h" . Opt_Gui_Main_H . " NA HIDE",% a_scriptname " - GuiHWND: " hGuiA
+
+settimer,Trans_Enact_Ornot,-10
+
+if(!api_key)
+	msgbox,% "please enter api key in the settings tab."
+Gui,PleaseWait:Show,Na Hide
+
+WinAnimate(hGuiA,"activate " Opt_Appear_Transition,Opt_Appear_TransitionDurMs)
+winset,style,+0x40000,ahk_id %hGuiA%
+settimer,Trans_Enact_Ornot,-1000
+
+GuiControl,hide,AnswerEdit ;GuiControl,hide,ToggleListView
+
+;GuiControl,Move,Answer, % "w" Opt_Gui_Main_H
+
+if(Opt_MultiLang)
+	GuiControl,,Answer,% "ChatGPT Response translated with Google Translate:"
+
+;GuiControl,Move,AnswerEdit2, % "y+140 h" 500 ;GuiControl, hide, AnswerEdit2
+
+GuiControl,hide,TextTranslate ; https://ahkde.github.io/docs/v1/lib/GuiControl.htm
+EM_SETCUEBANNER(InputQuestionhwnd, a_space "to ChatGPT3.5")
+Return,
 
 WM_LBUTTDOWNUP(wparam,lparam,umsg,hwnd) {
-	static xs, ys
-	static closedeye
+	static xs, ys, closedeye
 	(!closedeye? closedeye:=b64_2_hicon(icob64["EyeClose48"]))
 	global SbarhWnd,answer,AnswerEdithwnd,copiedthis
 	if(hwnd=AnswerEdithwnd)||(hwnd=AnswerEdithwnd2)
-		return
-	xcs:= lParam &0xffff, ycs:= lParam>>16
+		return,
+
+	xCs:= lParam &0xffff, yCs:= lParam>>16
+
 	coordmode,Mouse,Screen
 		ControlGetText, copiedthis , , ahk_id %SbarhWnd%
-msgbox % copiedthis
-	switch,hwnd {
+		mousegetpos, ,, hwndmouse,ctrlhwndmouse,2
+	switch,ctrlhwndmouse {
+		case,hGuiA,tabcontrolhwnd: PostMessage,0xA1,2 ; WM_NCLBUTTONDOWN
 		case,SbarhWnd: if(xcs<55) {
-			gui,Submit,NoHide
-			ss:= wingetpos(SbarhWnd)
-			tooltip,% "Refreshing...",ss.x-100,ss.y-35.1
-			SendMessage,0x40F,0,% closedeye,,ahk_id %SbarhWnd%
-			settimer,SBIconReset,-480
-			settimer,ttStop,-1480
-			return, 
-		}
-		case,AnswerEdithwnd:  {
-		msgbox 
-		clipboard:= answer
-		}
-
-	}
-
-	switch,umsg { 
+				gui,Submit,NoHide
+				ss:= wingetpos(SbarhWnd)
+				tooltip,% "Hiding double click tray to show...",ss.x-100,ss.y-35.1
+				SendMessage,0x40F,0,% closedeye,,ahk_id %SbarhWnd%
+				settimer,SBIconReset,-480
+				settimer,ttStop,-1180
+				settimer,HideMainGui,-1600
+				
+				return,
+			}
+			PostMessage,0xA1,2 ; WM_NCLBUTTONDOWN
+		case,AnswerEdithwnd: msgbox,%	clipboard:= answer
+	} return,
+	switch,umsg {
 		case,513 : mousegetpos,xs,ys
 			sleep 200, mousegetpos,xn,yn
 			if(xn!=xs||yn!=Ys) {
@@ -79,24 +126,23 @@ msgbox % copiedthis
 
 ^+v::
 string:=","
-if(instr(clipboard,chr(10))) { 
-	Loop,Parse,clipboard,`n 
+if(instr(clipboard,chr(10))) {
+	Loop,Parse,clipboard,`n
 	{
 		string.= a_loopfield ",`n"
 		count++
 		}
 		GuiControl,, % InputQuestion,% string
-GuiControl, Choose, r1,ahk_id   %InputQuestion%	
-}return
-
-
+GuiControl, Choose, r1,ahk_id   %InputQuestion%
+} return,
 
 Main:
+	Aero_StartUp()
+
 menu,tray,icon,% "HICON: " b64_2_HICON(icob64["smicon64"])
 menu,tray,icon
 
-; optionally Your OpenAI API key
- ;api_key := "thisApikey"  ; https://platform.openai.com/account/api-keys
+ ;api_key := "thisApikey"  ; https://platform.openai.com/account/api-keys ; optionally Your OpenAI API key
 
 ; The endpoint URL for the GPT-3 API
 api_url := "https://api.openai.com/v1/engines/text-davinci-003/completions"
@@ -106,7 +152,8 @@ try,{ ; Set up cURL session
 	curl.Open("POST", api_url)
 	curl.SetRequestHeader("Content-Type","application/json")
 	curl.SetRequestHeader("Authorization","Bearer " api_key)
-	; Build the JSON payload
+
+			; Build the JSON payload
 	jsonY =
 }
 
@@ -116,35 +163,35 @@ Gui,PleaseWait: Add,Text,xm vTextA w120 Center,% "Please wait..."
 Gui,PleaseWait: Add,Text,xs vTextB w99 Center,% "Loading..."
 Gui,PleaseWait: Show,% "x300 y" (A_ScreenHeight/2),% hGUIPleaseWait
 
-Gui,New,-dpiscale +hwndhGUIA +MaxSize%Gui_main_W%x%Gui_main_H% +MinSize%Gui_main_W%x%Gui_main_H% +ToolWindow -caption +AlwaysOnTop +LastFound +0x40000 -DPIScale, hGUIA
+Gui,New,-dpiscale +hwndhGuiA +MaxSize%Opt_Gui_Main_W%x%Opt_Gui_Main_H% +MinSize%Opt_Gui_Main_W%x%Opt_Gui_Main_H% +ToolWindow -caption +AlwaysOnTop +LastFound -0x40000 -DPIScale,% hGuiA ;+e0x80000 
 
 if(Opt_fontlarge)
 	Gui,Font,s12
 
 HeaderTitles:="Main"
 
-(opt_multilang? HeaderTitles.="|TranslateJson")
+(Opt_MultiLang? HeaderTitles.="|TranslateJson")
 
 (opt_seejson? HeaderTitles.="|ResultJson")
 
 HeaderTitles.="|Settings"
 
-Gui,Add,Tab3 ,% "w448 h" Gui_main_h-38,% HeaderTitles 
+Gui,Add,Tab3 ,% "hwndtabcontrolhwnd x" opt_GuiTabMarginSz " y" opt_GuiTabTopMargin " w" Opt_Guitab_W " h" Opt_Gui_Main_H-38,% HeaderTitles
 
 Gui,Tab,% "Main" ;Gui,Add,Text,,Question to ChatGPT:
 if(opt_richtext_question) {
 	hModuleME := DllCall("kernel32.dll\LoadLibrary", Str,"msftedit.dll", Ptr)
 	vPos := (!vShowBuiltIn1 && !vShowBuiltIn2) ? "y30" : "" ;make room for toolbar if needed
-	Gui, Add, Custom, % vPos " ClassRICHEDIT50W  vInputQuestion hwndInputQuestion x20 y44 h28 w" gui_question_W
+	Gui, Add, Custom, % vPos " ClassRICHEDIT50W  vInputQuestion hwndInputQuestion x" opt_GuiTabMarginSz + 4 " y41 h28 w" Opt_Gui_Question_W
 	ControlSetText, RICHEDIT50W1, % "RICH 1", % "ahk_id " hGui
 }	else {
-	Gui,Add,Edit, vInputQuestion hwndInputQuestionhwnd x20 y44 h28 w%gui_question_W% r2
-	GuiControl, Choose, r4,ahk_id   %InputQuestion%	
-
+	Gui,Add,Edit,% " vInputQuestion hwndInputQuestionhwnd x20 y" opt_GuiTabTopMargin +31 " h32 w" Opt_Gui_Question_W " " Opt_GuiQuestionLines
+	GuiControl, Choose, r4,ahk_id   %InputQuestion%
 }
+
 if(Opt_fontlarge)
 	Gui,Font,s12
-if(opt_multilang) {
+if(Opt_MultiLang) {
 	Gui,Add,Text,Section,% "Source Language:"
 	Gui,Add,Radio,ys Group gRadioGroupSelection Checked1 vMyRadioA,% "German"
 	Gui,Add,Radio,ys gRadioGroupSelection vMyRadioB,% "English"
@@ -154,20 +201,19 @@ if(opt_multilang) {
 Gui,Tab,% "Settings"
 if(Opt_fontlarge)
 	Gui,Font,s12
-Gui,Add,Text,x20 y60 Section,% "API Key:"
-if(opt_tokens) {
-	Gui, Add, Text, ys x+110,% "total_tokens:"
-	Gui, Add, Edit, ys w220 vTextApiKey,% "Counter"
+Gui,Add,Text,x38 y63 Section,% "API Key:"
+if(Opt_Tokens) {
+	Gui,Add,Text,ys x+110,% "total_tokens:"
+	Gui,Add,Edit,ys w220 vTextApiKey,% "Counter"
 } if(Opt_fontlarge)
-	Gui,Font, s11
-Gui,Add, Edit, x112 y60 vApi_key w540 h25 center Password,% api_key
+	Gui,Font,s11
+Gui,Add,Edit,% " x112 y60 vApi_key w" Opt_Gui_Main_W-165 " h25 center Password",% api_key
 if(Opt_fontlarge)
-	Gui,Font, s12
-
+	Gui,Font,s12
 Gui,Tab,% "Main"
-Gui,Add,Button,% "xs ys gButtonClick x" 24 + gui_question_W " y44 w54 h48 default Section",% "Ask..."
+Gui,Add,Button,% "gButtonClick x" 19 + Opt_Gui_Question_W " y50 w49 h50 default Section",% "Ask"
 
-if(opt_multilang)
+if(Opt_MultiLang)
 	Gui,Add,Button,ys gTranslateBeforeAsk w200 h30,% "Translate before Ask"
 
 Gui,Add,Button,ys gReloadApp +hwndreloadbutthwnd w68 h30, % "Reload"
@@ -178,63 +224,46 @@ guicontrol,Hide,% AnswerHeadingHwnd
 if(opt_richtext_answer) {
 	hModuleME := DllCall("kernel32.dll\LoadLibrary", Str,"msftedit.dll", Ptr)
 	vPos := (!vShowBuiltIn1 && !vShowBuiltIn2) ? "y30" : "" ;make room for toolbar if needed
-	Gui, Add, Custom, % vPos " ClassRICHEDIT50W  vAnswerEdit hwndAnswerEdithwnd x20 y80 r10 w%GUI_answer_W%" gui_answer_W
-	ControlSetText, RICHEDIT50W1, % "RICH 1", % "ahk_id " hGui
-}	else 	Gui,Add,Edit, vAnswerEdit hwndInputanswer x20 y96 r9 w%GUI_answer_W% r2
+	Gui,Add,Custom,% vPos " ClassRICHEDIT50W  vAnswerEdit hwndAnswerEdithwnd x20 y80 r10 w%Opt_GUI_Answer_W%" Opt_GUI_Answer_W
+	ControlSetText,RICHEDIT50W1,% "RICH 1", % "ahk_id " hGui
+}	else,Gui,Add,Edit,vAnswerEdit hwndInputanswer x20 y96 r9 w%Opt_GUI_Answer_W% %Opt_GuiQuestionLines%
 
-;Gui,Add,Edit,vAnswerEdit +hwndAnswerEdithwnd x20 y80 r10 w%GUI_answer_W%
+;Gui,Add,Edit,vAnswerEdit +hwndAnswerEdithwnd x20 y80 r10 w%Opt_GUI_Answer_W%
+
 Gui,Add,Text,vTextTranslate,% "Translate"
-Gui,Add,Edit,vAnswerEdit2 +hwndAnswerEdithwnd2 x20 y96 r9 w%GUI_answer_W%
+Gui,Add,Edit,% "vAnswerEdit2 +hwndAnswerEdithwnd2 x20 y" opt_GuiTabTopMargin +79 " r9 w" Opt_GUI_Answer_W
 
 if(opt_seejson) {
 	Gui,Tab,% "TranslateJson"
 	Gui,Add,Text,,Json
-	Gui,Add,Edit,vJsonEdit r30 w%GUI_answer_W%,
+	Gui,Add,Edit,vJsonEdit r30 w%Opt_GUI_Answer_W%,
 }
 
-if(opt_SeeResultJson) {
+if(Opt_SeeResultJson) {
 	Gui,Tab,% "ResultJson"
 	Gui,Add,Text,,Result
-	Gui,Add,Edit,vResultEdit x100 r30 w%GUI_answer_W%,
-;	Gui,Show,% "x100 y" (A_ScreenHeight/10), % a_scriptname " - GuiHWND: " hGUIA
+	Gui,Add,Edit,vResultEdit x100 r30 w%Opt_GUI_Answer_W% ;Gui,Show,% "x100 y" (A_ScreenHeight/10), % a_scriptname " - GuiHWND: " hGuiA
 } return,
 
-
-ShowMainGui:
-mousegetpos,x_,y_
-	Gui,Show,% (opt_SpawnOnMouse? ("x" . x_ -(gui_main_w/2) . " y" . y_ -(gui_main_h/5)):())  " w" . Gui_Main_W . " h" . Gui_main_h ,% a_scriptname " - GuiHWND: " hGUIA
-if(!api_key)
-	msgbox,% "please enter api key in the settings tab."
-Gui,PleaseWait:Show,Na Hide
-
-
-;GuiControl,hide,ToggleListView
-
-GuiControl,hide,AnswerEdit
-
-;GuiControl,Move,Answer, % "w" Gui_main_h
-
-if(opt_multilang)
-	GuiControl,,Answer,% "ChatGPT Response translated with Google Translate:"
-
-;GuiControl,Move,AnswerEdit2, % "y+140 h" 500 
-;GuiControl, hide, AnswerEdit2
-GuiControl,hide,TextTranslate ; https://ahkde.github.io/docs/v1/lib/GuiControl.htm
-EM_SETCUEBANNER(InputQuestionhwnd, a_space "to ChatGPT3.5")
-Return,
+Trans_Enact_Ornot:
+; (Opt_GuiTrans? VarSetCapacity(rect0,16,0xff) , DllCall("dwmapi\DwmExtendFrameIntoClientArea","uint",hGuiA,"uint",&rect0))
+if(Opt_GuiTrans) {
+ VarSetCapacity(rect0,16,0xff) 
+ DllCall("dwmapi\DwmExtendFrameIntoClientArea","uint",hGuiA,"uint",&rect0)
+}return,
 
 ;-=====================================================================================================================================
 
 OnMessages:
 onexit,exit
-;onmessage(0x201,"WM_LBUTTDOWNUP")
+onmessage(0x201,"WM_LBUTTDOWNUP")
 ;onmessage(0x202,"WM_LBUTTDOWNUP")
 OnMessage(0x6,"onActiv8")
 OnMessage(0x404,"AHK_NOTIFYICON")
 return,
 
 StatusBarInit:
-init:= 0, inc:= gui_main_w -28
+init:= 0, inc:= Opt_Gui_Main_W -38
 (init=0? Eye48_hIcon:= b64_2_hicon(icob64["Eye48"]))
 Gui,Add,StatusBar,+hWndSbarhWnd +e0x2000000
 SB_SetParts(inc,100)
@@ -251,6 +280,9 @@ return,
 ToggleListView:
 return,
 
+HideMainGui:
+(isWindowVisible(hGuiA)? WinAnimate(hGuiA,"hide " . Opt_Hide_Transition,Opt_Hide_TransitionDurMs))
+return,
 
 TranslateBeforeAsk:
 Gui,Submit,NoHide
@@ -264,8 +296,8 @@ Gui,PleaseWait:Show,% "x300 y" (A_ScreenHeight/2), % AttemptNo
 AttemptNo := 1
 jsonY := thisJson(InputQuestion)
 ; Send the request and get the response
-clipboard:=jsonY
-msgbox
+;msgbox % jsonY
+
 curl.Send(jsonY)
 result := curl.ResponseText
 test := result
@@ -294,19 +326,17 @@ If test =
 	GoTo, ButtonClick
 }
 
-Array:= []
-;Array := JSON.Load(result)
-Array:= JsonToAHK(result)
-;msgbox,, % "A_LineNumber. " A_LineNumber " - isObject", % isObject[Array)
-Number:= 1
+Array:= [] ;Array := JSON.Load(result)
+Array:= JsonToAHK(result) ;msgbox,, % "A_LineNumber. " A_LineNumber " - isObject", % isObject[Array)
 
-While(Number < 100) {
-	ToolTip,% Number
+i:= 1
+
+While(i< 100) { ; ToolTip,% i ;
 	setTimer,ttStop,-3000
-	Answer:= Array["choices"][Number]["text"]
-	If Answer !=
+	Answer:= Array["choices"][i]["text"]
+	If(Answer!="")
 		Break,
-	Number++
+	i++
 }
 
 Result:= RegExReplace(Result,"^[\s\r\n]+|[\s\r\n]+$","")  ; remove leading and trailing whitespaces
@@ -383,11 +413,11 @@ fileappend, % thisLV_ADD "`n", % a_scriptdir "\chatGPT UI - mini - history.txt"
  		. Array["usage", "completion_tokens"] "`t"
  		. Array["usage", "prompt_tokens"] "`t"
  		. Array["usage", "total_tokens"] "`n"
-fileappend, % thisLV_ADD "`n", % a_scriptdir "\chatGPT UI - mini - history-FULL.txt"
-      this_LV_Line := InputQuestion "`t"
+fileappend,% thisLV_ADD "`n",% a_scriptdir "\chatGPT UI - mini - history-FULL.txt"
+      this_LV_Line:= InputQuestion "`t"
  		    . Answer "`t"
  		    . Answer2 "`n"
-fileappend, % this_LV_Line "`n", % a_scriptdir "\chatGPT UI - mini - this_LV_Line.txt"
+fileappend,% this_LV_Line "`n", % a_scriptdir "\chatGPT UI - mini - this_LV_Line.txt"
 return,
 
 ReloadApp:
@@ -407,42 +437,40 @@ ExitApp
 ;ahkObj := JsonToAHK(json)
 ;MsgBox, % ahkObj["Digital", 3, "key"]
 
-JsonToAHK(json, rec:= false) {
+JsonToAHK(json, rec:= False) {
 	static doc:= ComObjCreate("htmlfile")
 				, __:= doc.write("<meta http-equiv=""X-UA-Compatible"" content=""IE=9"">")
 				, JS:= doc.parentWindow
 	if(!rec)
-		obj:= %A_ThisFunc%(JS.eval("(" . json . ")"), true)
+		obj:= %A_ThisFunc%(JS.eval("(" . json . ")"), True)
 	else,if(!IsObject(json))
 		obj:= json
 	else,if JS.Object.prototype.toString.call(json) == "[object Array]" {
 		obj := []
 		Loop % json.length
-				obj.Push( %A_ThisFunc%(json[A_Index - 1], true) )
+				obj.Push( %A_ThisFunc%(json[A_Index - 1], True) )
 	} else {
 		obj:= {}
 		keys:= JS.Object.keys(json)
 		Loop,% keys.length {
 				k:= keys[A_Index -1]
-				obj[k]:= %A_ThisFunc%(json[k], true)
+				obj[k]:= %A_ThisFunc%(json[k], True)
 		}
 	}
 	Return,obj
 }
 
-thisJson(ByRef Search_Input := "PROMPT") {
- ; Build the JSON payload
- 	Search_Input:= RegExReplace(Search_Input, "\""", """""")
- 	Search_Input:= RegExReplace(Search_Input, "\n", "``n")
+thisJson(ByRef Search_Input := "PROMPT") { ; Build the JSON payload
+ 	Search_Input:= RegExReplace(Search_Input:= RegExReplace(Search_Input,"\""",""""""),"\n","``n")
  	jsonY=
 	(
-		{
-		    "prompt": "%Search_Input%",
-		    "max_tokens": 4011,
-		    "temperature": 0.9
-		}
+   {
+     "prompt": "%Search_Input%",
+     "max_tokens": %Opt_MaxTokens%,
+     "temperature": %Opt_Temeperature%
+   }
 	)
-	Return jsonY
+	Return,jsonY
 }
 
 BeautifyJson(json, indent := "    ") {
@@ -453,36 +481,37 @@ BeautifyJson(json, indent := "    ") {
 		JS:= Doc.parentWindow
 	} Return JS.eval("JSON.stringify(" . json . ",'','" . indent . "')")
 }
+
 ;################################################################################################################
 
 ;MsgBox, % GoogleTranslate("今日の天気はとても良いです")
 ;MsgBox, % GoogleTranslate("Hello, World!", "en", "ru")
 
-GoogleTranslate(str, from := "auto", to := "de") {
-   static JS := CreateScriptObj(), _ := JS.( GetJScript() ) := JS.("delete ActiveXObject; delete GetObject;")
+GoogleTranslate(str,from:= "auto", to:= "de") {
+   static JS:= CreateScriptObj(), _:= JS.( GetJScript() ):= JS.("delete ActiveXObject; delete GetObject;")
 
-   json := SendRequest(JS, str, to, from, proxy := "")
-		oJSON := JS.("(" . json . ")")
+   json:= SendRequest(JS,str,to,from,proxy:= "")
+		oJSON:= JS.("(" . json . ")")
 
-	ATickCount := A_TickCount
-	try thisBeautifyJson := BeautifyJson(json)
-	GuiControl,, JsonEdit, %thisBeautifyJson%
+	ATickCount:= A_TickCount
+	try,thisBeautifyJson:= BeautifyJson(json)
+	GuiControl,,JsonEdit,% thisBeautifyJson
 
 	;try fileappend,% thisBeautifyJson,% a_ScriptDir "\" ATickCount "-Google Translate json_History ChatGTP.json.txt"
 	;try run,% a_ScriptDir "\" ATickCount "-Google Translate json_History ChatGTP.json.txt"
 
 	if(!IsObject(oJSON[1])) {
 		Loop,% oJSON[0].length
-				trans .= oJSON[0][A_Index -1][0]
+			trans .= oJSON[0][A_Index -1][0]
 	} else {
-		MainTransText := oJSON[0][0][0]
-		Loop % oJSON[1].length {
-				trans .= "`n+"
-				obj:= oJSON[1][A_Index-1][1]
-				Loop,% obj.length {
-					txt:= obj[A_Index - 1]
-					trans .= (MainTransText = txt ? "" : "`n" txt)
-				}
+		MainTransText:= oJSON[0][0][0]
+		Loop,% oJSON[1].length {
+			trans .= "`n+"
+			obj:= oJSON[1][A_Index-1][1]
+			Loop,% obj.length {
+				txt:= obj[A_Index - 1]
+				trans .= (MainTransText = txt ? "" : "`n" txt)
+			}
 		}
 	}
 
@@ -490,17 +519,16 @@ GoogleTranslate(str, from := "auto", to := "de") {
 		MainTransText:= trans:= Trim(trans, ",+`n ")
 	else,trans:= MainTransText . "`n+`n" . Trim(trans, ",+`n ")
 	from:= oJSON[2]
-	trans:= Trim(trans, ",+`n ")
-	Return,trans
+	Return,trans:= Trim(trans, ",+`n ")
 }
 
 SendRequest(JS,str,tl,sl,proxy) {
 	static http
-	ComObjError(false)
+	ComObjError(False)
 	if(!http) {
 			http:= ComObjCreate("WinHttp.WinHttpRequest.5.1")
 			( proxy && http.SetProxy(2, proxy) )
-			http.open("GET", "https://translate.google.com", true)
+			http.open("GET", "https://translate.google.com", True)
 			http.SetRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0")
 			http.send()
 			http.WaitForResponse(-1)
@@ -508,7 +536,7 @@ SendRequest(JS,str,tl,sl,proxy) {
 								; or "https://clients5.google.com/translate_a/t?client=dict-chrome-ex"
 			. "&sl=" . sl . "&tl=" . tl . "&hl=" . tl
 			. "&dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t&ie=UTF-8&oe=UTF-8&otf=0&ssel=0&tsel=0&pc=1&kc=1"
-			. "&tk=" . JS.("tk").(str), true)
+			. "&tk=" . JS.("tk").(str), True)
 
 	http.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded;charset=utf-8")
 	http.SetRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0")
@@ -528,41 +556,41 @@ URIEncode(str,encoding:= "UTF-8") {
 }
 
 GetJScript() {
-   script =
-   (
-      var TKK = ((function() {
-        var a = 561666268;
-        var b = 1526272306;
-        return 406398 + '.' + (a + b);
-      })());
-
-      function b(a, b) {
-        for (var d = 0; d < b.length - 2; d += 3) {
-            var c = b.charAt(d + 2),
-                c = "a" <= c ? c.charCodeAt(0) - 87 : Number(c),
-                c = "+" == b.charAt(d + 1) ? a >>> c : a << c;
-            a = "+" == b.charAt(d) ? a + c & 4294967295 : a ^ c
-        }
-        return a
-      }
-
-      function tk(a) {
-          for (var e = TKK.split("."), h = Number(e[0]) || 0, g = [], d = 0, f = 0; f < a.length; f++) {
-              var c = a.charCodeAt(f);
-              128 > c ? g[d++] = c : (2048 > c ? g[d++] = c >> 6 | 192 : (55296 == (c & 64512) && f + 1 < a.length && 56320 == (a.charCodeAt(f + 1) & 64512) ?
-              (c = 65536 + ((c & 1023) << 10) + (a.charCodeAt(++f) & 1023), g[d++] = c >> 18 | 240,
-              g[d++] = c >> 12 & 63 | 128) : g[d++] = c >> 12 | 224, g[d++] = c >> 6 & 63 | 128), g[d++] = c & 63 | 128)
-          }
-          a = h;
-          for (d = 0; d < g.length; d++) a += g[d], a = b(a, "+-a^+6");
-          a = b(a, "+-3^+b+-f");
-          a ^= Number(e[1]) || 0;
-          0 > a && (a = (a & 2147483647) + 2147483648);
-          a `%= 1E6;
-          return a.toString() + "." + (a ^ h)
-      }
-   )
-   Return script
+		script =
+		(
+			var TKK = ((function() {
+				var a = 561666268;
+				var b = 1526272306;
+				return 406398 + '.' + (a + b);
+			})());
+	
+			function b(a, b) {
+				for (var d = 0; d < b.length - 2; d += 3) {
+						var c = b.charAt(d + 2),
+								c = "a" <= c ? c.charCodeAt(0) - 87 : Number(c),
+								c = "+" == b.charAt(d + 1) ? a >>> c : a << c;
+						a = "+" == b.charAt(d) ? a + c & 4294967295 : a ^ c
+				}
+				return a
+			}
+	
+			function tk(a) {
+					for (var e = TKK.split("."), h = Number(e[0]) || 0, g = [], d = 0, f = 0; f < a.length; f++) {
+							var c = a.charCodeAt(f);
+							128 > c ? g[d++] = c : (2048 > c ? g[d++] = c >> 6 | 192 : (55296 == (c & 64512) && f + 1 < a.length && 56320 == (a.charCodeAt(f + 1) & 64512) ?
+							(c = 65536 + ((c & 1023) << 10) + (a.charCodeAt(++f) & 1023), g[d++] = c >> 18 | 240,
+							g[d++] = c >> 12 & 63 | 128) : g[d++] = c >> 12 | 224, g[d++] = c >> 6 & 63 | 128), g[d++] = c & 63 | 128)
+					}
+					a = h;
+					for (d = 0; d < g.length; d++) a += g[d], a = b(a, "+-a^+6");
+					a = b(a, "+-3^+b+-f");
+					a ^= Number(e[1]) || 0;
+					0 > a && (a = (a & 2147483647) + 2147483648);
+					a `%= 1E6;
+					return a.toString() + "." + (a ^ h)
+			}
+		)
+		Return script
 }
 
 CreateScriptObj() {
@@ -577,9 +605,18 @@ CreateScriptObj() {
 	} Return,_JS
 }
 
+WinAnimate(Hwnd,Type="",Time=100) {
+	static AW_ACTIVATE=0x20000,  AW_BLEND=0x80000, AW_CENTER=0x10, AW_HIDE=0x10000
+	,	AW_HNEG=0x2,AW_HPOS=0x1, AW_SLIDE=0x40000, AW_VNEG=0x8, AW_VPOS=0x4
+	loop,parse,Type,%A_Tab%%A_Space%,%A_Tab%%A_Space%
+		ifEqual,A_LoopField,,Continue,
+		else,(!hFlags? (hFlags:= 0, hFlags|=AW_%A_LoopField%):hFlags|=AW_%A_LoopField%)
+	ifEqual,hFlags,% "",return,"Err: Some of the types are invalid"
+	return,dllcall("AnimateWindow","uint",Hwnd,"uint",Time,"uint",hFlags)
+}
 
 onMsgbox(HookCr,eventcr,hWnd,idObject,idChild,dwEventThread) {
-	winget,pid,pid,ahk_id %hwnd% 
+	winget,pid,pid,ahk_id %hwnd%
 	if(pid!=r_pid)
 		return,	;if its our mbox change icon
 	onActiv8(wparam="",lparam="",msg="",hwnd)
@@ -632,6 +669,26 @@ onActiv8(wparam="",lparam="",msg="",hwnd="") {
 	Return,ErrorLevel
 }
 
+Aero_StartUp(){
+	global
+		MODULEID3:=DllCall("LoadLibrary", "str", "dwmapi")
+		MODULEID2:=DllCall("LoadLibrary", "str", "uxtheme") ;zwar noch nicht gebraucht aber egal
+		MODULEID:=MODULEID3 . "|" . MODULEID2
+		Return,MODULEID
+
+}
+
+WinMove(hWnd="",X="",Y="",W="",H="",byref flags="") {
+	static local dts:=0
+	,uint:="uint", int:="int"
+	,msg_:="SetWindowPos"
+	listlines,off
+	((dts=0)? (dts:= ((Flags="")
+	? (optM2dAutoActiv8? 0x4:0x015):dts:=flags)))
+	return,DllCall(msg_,uint,hWnd,uint,0,int,x,int,y,int,w,int,h,uint,dts)
+}
+
+
 B64_2_hicon(B64in,NewHandle:= False) {
 	Static hBitmap:= 0
 	(NewHandle? hBitmap:= 0)
@@ -660,11 +717,16 @@ B64_2_hicon(B64in,NewHandle:= False) {
 	return,byref hIcon
 }
 
+IsWindowVisible(hWnd) {
+	listlines,off
+	return,dllcall("IsWindowVisible","Ptr",hWnd)
+}
+
 SBIconReset:
 global icob64, SbarhWnd, eyeo
 SendMessage,0x40F,0,% Eye48_hIcon,,ahk_id %SbarhWnd%
 if(!eyeo?eyeo:=b64_2_hicon(icob64["Eye48"]))
-	SendMessage,0x40F,0,% eyeo,,ahk_id %SbarhWnd% 
+	SendMessage,0x40F,0,% eyeo,,ahk_id %SbarhWnd%
 return,
 
 MenuTray:
@@ -682,8 +744,10 @@ menu,Tray,Add ,% "Open",%			"MenHandlr"
 menu,Tray,Icon,% "Open",% 		"HICON: " b64_2_hicon(icob64["data24"])
 menu,Tray,Add ,% "Open Containing",% "MenHandlr"
 menu,Tray,Icon,% "Open Containing",% "HICON: " b64_2_hicon(icob64["runfolder24"]) ;	"C:\Icon\24\explorer24.ico"
-menu,Tray,Add ,% "Edit",%			"MenHandlr"
-menu,Tray,Icon,% "Edit",% 		"HICON: " b64_2_hicon(icob64["edit24"]) ;	"C:\Icon\24\explorer24.ico"
+if(!A_IsCompiled) {
+	menu,Tray,Add ,% "Edit",%			"MenHandlr"
+	menu,Tray,Icon,% "Edit",% 		"HICON: " b64_2_hicon(icob64["edit24"]) ;	"C:\Icon\24\explorer24.ico"
+}
 menu,Tray,Add ,% "Reload",%		"MenHandlr"
 menu,Tray,Icon,% "Reload",% 	"HICON: " b64_2_hicon(icob64["reload24"]) ;	"C:\Icon\24\eaa.bmp"
 menu,Tray,Add,%	 "Suspend",%	"MenHandlr"
@@ -716,11 +780,15 @@ MenHandlr(isTarget="") {
 AHK_NOTIFYICON(byref wParam="", byref lParam="") {
 	listlines,off
 	switch,lParam {
-		case,0x0203: 	PostMessage,0x0111,%open%,,,% A_ScriptName " - AutoHotkey"
-			sleep(80),tt("Loading...","tray",1) ; WM_LBdoubleclick
+		case,0x0203: if(IsWindowVisible(hGuiA))
+				settimer,HideMainGui,-20
+			else,settimer,ShowMainGui,-20
+			return,
+		;	PostMessage,0x0111,%open%,,,% A_ScriptName " - AutoHotkey"
+		;	sleep(80),tt("Loading...","tray",1) ; WM_LBdoubleclick
 		case,0x0204: settimer,MenuTray,-30 ;WM_RBUTTONdn RBD Will initiate the menu RBU will select item
 			return,1
-		case,0x0205: send,{enter} 
+		case,0x0205: send,{enter}
 		return,1
 	}	return,
 }
@@ -728,18 +796,20 @@ AHK_NOTIFYICON(byref wParam="", byref lParam="") {
 reload() {
 	reload,
 	exitapp,
-} 
+}
 
 Varz:
-global r_pid,copiedthis, api_key, AnswerEdithwnd,InputQuestion,InputQuestionhwnd, GUI_answer_W, regbase, Gui_Main_W, xs, ys, smicon64, lgicon64, opt_multilang, opt_tokens, opt_SpawnOnMouse, gui_question_W, EDIT:=65304, open:=65407, Suspend:=65305, PAUSE:=65306, exit:=6530, SbarhWnd
-,	r_pid:= DllCall("GetCurrentProcessId"), hOOkz
+global r_pid, tabcontrolhwnd, copiedthis, api_key, AnswerEdithwnd, InputQuestion, InputQuestionhwnd, Opt_GUI_Answer_W, regbase, Opt_Gui_Main_W, xs, ys, smicon64, lgicon64, Opt_MultiLang, Opt_Tokens, Opt_SpawnOnMouse, opt_GuiTabMarginSz, Opt_MaxTokens, Opt_Appear_Transition, Opt_Appear_TransitionDurMs, Opt_Gui_Question_W, Opt_GuiQuestionLines, Opt_Hide_Transition, opt_GuiTabTopMargin, Opt_Hide_TransitionDurMs, Opt_Guitab_W, EDIT:= 65304, open:= 65407, Suspend:= 65305, PAUSE:= 65306, exit:= 6530, SbarhWnd, Opt_Temeperature, Opt_GuiTrans, hGuiA
+
+, r_pid:= DllCall("GetCurrentProcessId"), hOOkz
+
 , icob64:= []
-  
+
 RegBase:= "HKEY_CURRENT_USER\SOFTWARE\_ch@_GP-Tizzle"
 gosub,b64icons_
 return,
 
-b64icons_:
+B64icons_:
 icob64["smicon64"]:="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"
 
 icob64["lgicon64"]:="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"
@@ -761,6 +831,8 @@ icob64["edit24"]:="iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6
 icob64["runfolder24"]:="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"
 
 icob64["data24"]:="iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAAFiUAABYlAUlSJPAAAAGISURBVEhL7ZU/S8NAGIdPKjg4+RncFbSD3VzqICqi6OCfJuJmdZGqu6vuFQzooA5OdvADKHQK/QCCqFf9Hmd+h+9x9zaXNJktPKR538vvyd01jViIpVrsSrXxLNXWk1T7kVTNi3ROmy5nRz+q3pOascq4IJK6pjIyKsTyi1SN6etSQJAmcQS4awxOGoUhwUnLlXgFkxM1FUR9w/zblxPI6wgPa3eqdfDpSLwCHmqf03cuCKq3Kpz7kxwPSkT4MJwgrUaCoHqjJTjnM/EKcMwTHF5+GwFJMBOISCLw8+MCHHkYYdca98meaIFLpoDCeVhabem1ryWYCUJtjAAPTNk9IIQQDpjFymM8KKAAgss41OeC3dnILyhDpsDeg7IUFvAlyOsVEtDFaQJfr5CASBP4ev+C3F6mAK9IPAs7U+3MkKxermDvPNYCgIs5FObrcQFyjGAtedlvtmMDlguD6O6GIVdgQxJMk9ieuXKwewT9VdNKGIH94TKw3vnQrHbeNVTj4zgIr/ek+gV1Jm8TdticOwAAAABJRU5ErkJggg"
+
 icob64["EyeClose48"]:="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"
+
 icob64["Eye48"]:="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"
 return,
