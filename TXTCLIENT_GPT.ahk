@@ -267,12 +267,11 @@ if(Opt_GuiTrans) {
  DllCall("dwmapi\DwmExtendFrameIntoClientArea","uint",hGuiA,"uint",&rect0)
 } return,
 
-+e::
+;+e::
 
 DataEntryWindow:
 gui_W:=300, gui_H:=138
-WS_POPUP = 0x80000000
-WS_CHILD = 0x40000000
+WS_POPUP = 0x80000000, WS_CHILD = 0x40000000
 
 Gui,1:+LastFound +hWndhGui1 +Owner +AlwaysOnTop +hwndghwnd +0x40000 -0x400000
 Gui,1:Color,181535
@@ -293,13 +292,13 @@ Child_ID := WinExist()
 DllCall("SetParent","uint",Child_ID,"uint",Parent_ID)
 Gui,2:Add,Text,vtext1 %opt_gui_fontcol% w270 x17 y17 AltSubmit,% "Please enter API Key:"
 OnMessage(0x6,"col")
-Gui,1:Show,x-300 y-200 w%gui_W% h%gui_H%,no_glass
-;Gui, 1: Add, Text, vtext2 w270 x15 y15 AltSubmit, Please enter the Password:
+Gui,1:Show,x-300 y-200 w%gui_W% h%gui_H%,% "no_glass" ;Gui, 1: Add, Text, vtext2 w270 x15 y15 AltSubmit, Please enter the Password:
+
 Gui,2: Show, x0 y0 w300 h135,no_glass
 Gui,1: hide
+
 dBlur(ghwnd)
 win_move(ghwnd,A_screenwidth*.5-gui_W,A_screenheight*.5-gui_H,"","","")
-
 Win_Animate(ghwnd,"hneg slide",200)
 winactivate,ahk_id %ghwnd%
 GuiControl, Focus,% apientryedithwnd
