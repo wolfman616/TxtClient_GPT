@@ -1,9 +1,8 @@
 ﻿#NoEnv ; (MW:2023) (MW:2023) TxtClient_GPT ; I use 144dpi this may be the only DPI working as intended/ This is untested.
 #NoTrayicon
-
 ListLines,Off
 SetBatchLines,-1
-
+SetWinDelay,-1
 #Persistent
 #Singleinstance,Force
 Setworkingdir,% (splitpath(A_AhkPath)).dir
@@ -11,41 +10,42 @@ DetectHiddenWindows,On
 DetectHiddenText,	On
 SetTitleMatchMode,2
 SetTitleMatchMode,Slow
-SetWinDelay,-1
 coordMode,ToolTip,Screen
 coordmode,Mouse,	Screen
+
+InitialQuestion:= A_args[1]?  A_args[1] : "" ; "Marius is " ; test*
 
 loop,parse,% "VarZ,Menus,Hookinit,Optionz,Dimz,RegRead,OnMessages,Main,StatusBarInit,ShowMainGui",`,
 	 gosub,% a_loopfield
 return,
 
 Optionz:
-Opt_Appear_TransitionN	:= " slide vpos "
-Opt_Appear_TransitionS	:= " slide vneg "
-Opt_Appear_TransitionDurMs:= 200
-Opt_Hide_TransitionN		:= " Slide VNeg "
-Opt_Hide_TransitionS		:= " Slide Vpos "
-Opt_Hide_TransitionDurMs	:= 150
+Opt_DebugPayload:= False
+MattTheme:= False ;set to false if you are not Matt
 
-Opt_GuiBlur:= True ; works with AeroGlass
-Opt_GuiTrans:= False ; works with AeroGlass
-Opt_SpawnOnMouse:= True
-Opt_MultiLang:= False
-Opt_SeeResultJson:= False
+, Opt_Appear_TransitionN	:= " slide vpos "
+, Opt_Appear_TransitionS	:= " slide vneg "
+, Opt_Appear_TransitionDurMs:= 200
+, Opt_Hide_TransitionN		:= " Slide VNeg "
+, Opt_Hide_TransitionS		:= " Slide Vpos "
+, Opt_Hide_TransitionDurMs	:= 150
+ 
+, Opt_GuiBlur				:= False ; works with AeroGlass
+, Opt_GuiTrans			:= False ; works with AeroGlass
+, Opt_SpawnOnMouse	:= True
+, Opt_MultiLang			:= False
+, Opt_SeeResultJson	:= False
 
-; Gpt json payload stuff ;
-Opt_Tokens:= False
-Opt_MaxTokens:= 4011
-Opt_Temeperature:= 0.5
+; Gpt options in json payload ;
+, Opt_Tokens:= False
+, Opt_MaxTokens:= 3999
+, Opt_Temperature:= 0.001 ; 0-Strict / 1-Creative ;
 return,
 
 Dimz:
 opt_guicolor:= 070011
-opt_gui_fontcol:= "c7488D8"
-
-MattTheme:= True ;set to false if you are not Matt
-Const_OtherGuiMargin:= MattTheme? 10 : 18 ; other system metrics for window frame dimension approximation
-
+, opt_gui_fontcol:= "c7488D8"
+, Const_OtherGuiMargin:= MattTheme? 10 : 18 ; other system metrics for window frame dimension approximation
 , Opt_GuiQuestionLines:= "r2"
 , Opt_GuiTabMarginSz	:= 18
 , opt_GuiTabTopMargin := 20
@@ -63,9 +63,17 @@ if(instr(clipboard,chr(10))) {
 	Loop,Parse,clipboard,`n
 		string.= a_loopfield ",`n"
 		, count++
-	GuiControl,,% InputQuestion,% string
-	GuiControl,Choose,r1,ahk_id   %InputQuestion%
+	GuiControl,,% InputQuestionhwnd,% string
+	GuiControl,Choose,r1,ahk_id   %InputQuestionhwnd%
 } return,
+
+OnMessages:
+onexit,exit
+onmessage(0x201,"WM_LBUTTDOWNUP")
+;onmessage(0x202,"WM_LBUTTDOWNUP")
+OnMessage(0x6,"onActiv8")
+OnMessage(0x404,"AHK_NOTIFYICON")
+return,
 
 ShowMainGui:
 mousegetpos,x_,y_
@@ -94,14 +102,23 @@ settimer,Trans_Enact_OrNot,-1000
 GuiControl,hide,AnswerEdit ;GuiControl,hide,ToggleListView ;GuiControl,Move,Answer, % "w" Opt_Gui_Main_H
 
 if(Opt_MultiLang)
-	GuiControl,,Answer,% "ChatGPT Response translated with Google Translate:"
-
-;GuiControl,Move,AnswerEdit2, % "y+140 h" 500 ;GuiControl, hide, AnswerEdit2
-
+	GuiControl,,Answer,% "ChatGPT Response translated with Google Translate:" ;GuiControl,Move,AnswerEdit2, % "y+140 h" 500 ;GuiControl, hide, AnswerEdit2
 GuiControl,hide,TextTranslate ; https://ahkde.github.io/docs/v1/lib/GuiControl.htm
 EM_SETCUEBANNER(InputQuestionhwnd, a_space "to ChatGPT3.5")
-
+if(InitialQuestion) {
+	GuiControl,Text,%InputQuestionhwnd%,% InitialQuestion
+	gosub,ButtonClick
+} GuiControl,Focus,% InputQuestionhwnd
 Return,
+
+onActiv8(wparam="",lparam="",msg="",hwnd="") {
+	local static smicon:= b64_2_hicon(icoB64["smicon64"])
+	, lgicon:= b64_2_hicon(icoB64["lgicon64"])
+	,large:=1, small:=0, m:= 0x80
+	SendMessage,m,small,smicon,,ahk_id %hWnd% ;WM_SETICON,ICON_SMALL
+	SendMessage,m,large,lgicon,,ahk_id %hWnd% ;WM_SETICON,ICON_LARGE
+	Return,ErrorLevel
+}
 
 WM_LBUTTDOWNUP(wparam,lparam,umsg,hwnd) {
 	static xs, ys, closedeye
@@ -113,10 +130,10 @@ WM_LBUTTDOWNUP(wparam,lparam,umsg,hwnd) {
 	xCs:= lParam &0xffff, yCs:= lParam>>16
 
 	coordmode,Mouse,Screen
-	ControlGetText, copiedthis , , ahk_id %SbarhWnd%
-	mousegetpos, ,, hwndmouse,ctrlhwndmouse,2
+	ControlGetText,copiedthis , , ahk_id %SbarhWnd%
+	mousegetpos,,,hwndmouse,ctrlhwndmouse,2
 	switch,ctrlhwndmouse {
-		case,hGuiA,tabcontrolhwnd: PostMessage,0xA1,2 ; WM_NCLBUTTONDOWN
+		case,hGuiA,tabcontrolhwnd: PostMessage,0xA1,2 ; WM_NCLBUTTONDOWN - Same as dragging window by its tittlebar.
 		case,SbarhWnd: if(xcs<55) {
 				gui,Submit,NoHide
 				ss:= wingetpos(SbarhWnd)
@@ -126,11 +143,10 @@ WM_LBUTTDOWNUP(wparam,lparam,umsg,hwnd) {
 				settimer,ttStop,-1180
 				settimer,HideMainGui,-1600
 				return,
-			} PostMessage,0xA1,2 ; WM_NCLBUTTONDOWN
+			} PostMessage,0xA1,2 
 		case,AnswerEdithwnd2,AnswerEdithwnd: msgbox,%	"sdaads " clipboard:= answer
 		default:PostMessage,0xA1,2
 	} return,
-
 ;	switch,umsg {
 ;		case,513 : mousegetpos,xs,ys
 ;			sleep 200, mousegetpos,xn,yn
@@ -147,30 +163,20 @@ Main:
 
 (MattTheme? Aero_StartUp())
 
-menu,tray,icon,% "HICON: " b64_2_HICON(icoB64["tray24"])
+menu,tray,icon,% "HICON: " b64_2_HICON(icoB64["tray24"])	;24x24 @144 dpi (SM_CXSMICON,SM_CYSMICON)
 menu,tray,icon
 
-	; api_key := "thisApikey"  ; https://platform.openai.com/account/api-keys ; optionally Your OpenAI API key
-	; The endpoint URL for the GPT-3 API
-api_url := "https://api.openai.com/v1/engines/text-davinci-003/completions"
-	; Set up cURL session
-try,{ 
-	curl:= ComObjCreate("WinHttp.WinHttpRequest.5.1")
-	curl.Open("POST", api_url)
-	curl.SetRequestHeader("Content-Type","application/json")
-	curl.SetRequestHeader("Authorization","Bearer " api_key)
+	; api_key := "thisApikey"  ; https://platform.openai.com/account/api-keys ; optionally Your OpenAI API-key.
+	; The endpoint URL for the GPT-3 API.
 
-	; Build the JSON payload
-	jsonY =
-}
 
 Gui,PleaseWait: -dpiscale +LastFound +AlwaysOnTop +Disabled -resize -Caption +ToolWindow  +hwndhGUIPleaseWait +0x40000
-Gui,PleaseWait: Color,%opt_guicolor% 
+Gui,PleaseWait: Color,%opt_guicolor%
 Gui,PleaseWait: Add,Text,xm vTextA w120 Center,% "Please wait..."
 Gui,PleaseWait: Add,Text,xs vTextB w99 Center,% "Loading..."
 Gui,PleaseWait: Show,% "x300 y" (A_ScreenHeight/2),% hGUIPleaseWait
 
-Gui,New,-dpiscale +hwndhGuiA +MaxSize%Opt_Gui_Main_W%x%Opt_Gui_Main_H% +MinSize%Opt_Gui_Main_W%x%Opt_Gui_Main_H% +ToolWindow -caption +AlwaysOnTop +LastFound -0x40000 -DPIScale,% hGuiA ;+e0x80000 
+Gui,New,-dpiscale +hwndhGuiA +MaxSize%Opt_Gui_Main_W%x%Opt_Gui_Main_H% +MinSize%Opt_Gui_Main_W%x%Opt_Gui_Main_H% +ToolWindow -caption +AlwaysOnTop +LastFound -0x40000 -DPIScale,% hGuiA ;+e0x80000
 gui,color,% opt_guicolor,% opt_guicolor
 if(Opt_fontlarge)
 	Gui,Font,s12
@@ -189,10 +195,10 @@ Gui,Tab,% "Main" ;Gui,Add,Text,,Question to ChatGPT:
 if(opt_richtext_question) {
 	hModuleME := DllCall("kernel32.dll\LoadLibrary", Str,"msftedit.dll", Ptr)
 	vPos := (!vShowBuiltIn1 && !vShowBuiltIn2) ? "y30" : "" ;make room for toolbar if needed
-	Gui,Add,Custom,% vPos " ClassRICHEDIT50W vInputQuestion hwndInputQuestion x" opt_GuiTabMarginSz + 4 " y41 h28 w" Opt_Gui_Question_W "c" opt_guicolor 
+	Gui,Add,Custom,% vPos " ClassRICHEDIT50W vInputQuestion hwndInputQuestionhwnd x" opt_GuiTabMarginSz + 4 " y41 h28 w" Opt_Gui_Question_W "c" opt_guicolor
 	ControlSetText,RICHEDIT50W1,% "RICH 1",% "ahk_id " hGui
 }	else {
-	Gui,Add,Edit,% " vInputQuestion hwndInputQuestionhwnd x20 y" opt_GuiTabTopMargin +31 " h32 w" Opt_Gui_Question_W " " Opt_GuiQuestionLines " " opt_gui_fontcol 
+	Gui,Add,Edit,% " vInputQuestion hwndInputQuestionhwnd x20 y" opt_GuiTabTopMargin +31 " h32 w" Opt_Gui_Question_W " " Opt_GuiQuestionLines " " opt_gui_fontcol
 	GuiControl, Choose, r4,ahk_id   %InputQuestion%
 	Gui,Font,c7488D8
 
@@ -241,12 +247,12 @@ if(opt_richtext_answer) {
 	vPos := (!vShowBuiltIn1 && !vShowBuiltIn2) ? "y30" : "" ;make room for toolbar if needed
 	Gui,Add,Custom,% vPos " ClassRICHEDIT50W  vAnswerEdit hwndAnswerEdithwnd x20 y80 r10 w%Opt_GUI_Answer_W%" Opt_GUI_Answer_W " h" Opt_GUI_Answer_H
 	ControlSetText,RICHEDIT50W1,% "RICH 1", % "ahk_id " hGui
-}	else,Gui,Add,Edit,% "vAnswerEdit +hwndanswerEdithwnd x20 y96 r9 w" Opt_GUI_Answer_W " " Opt_GuiQuestionLines " h" Opt_GUI_Answer_H " c" opt_guicolor 
+}	else,Gui,Add,Edit,% "vAnswerEdit +hwndanswerEdithwnd x20 y96 r9 w" Opt_GUI_Answer_W " " Opt_GuiQuestionLines " h" Opt_GUI_Answer_H " c" opt_guicolor
 
 ;Gui,Add,Edit,vAnswerEdit +hwndAnswerEdithwnd x20 y80 r10 w%Opt_GUI_Answer_W%
 
 Gui,Add,Text,vTextTranslate,% "Translate"
-Gui,Add,Edit,% "vAnswerEdit2 +hwndAnswerEdithwnd2 x20 y" opt_GuiTabTopMargin +79 " r8 w" Opt_GUI_Answer_W " h" Opt_GUI_Answer_H " " opt_gui_fontcol 
+Gui,Add,Edit,% "vAnswerEdit2 +hwndAnswerEdithwnd2 x20 y" opt_GuiTabTopMargin +79 " r8 w" Opt_GUI_Answer_W " h" Opt_GUI_Answer_H " " opt_gui_fontcol
 
 if(opt_seejson) {
 	Gui,Tab,% "TranslateJson"
@@ -263,32 +269,29 @@ if(Opt_SeeResultJson) {
 Trans_Enact_OrNot:
 ; (Opt_GuiTrans? VarSetCapacity(rect0,16,0xff) , DllCall("dwmapi\DwmExtendFrameIntoClientArea","uint",hGuiA,"uint",&rect0))
 if(Opt_GuiTrans) {
- VarSetCapacity(rect0,16,0xff) 
+ VarSetCapacity(rect0,16,0xff)
  DllCall("dwmapi\DwmExtendFrameIntoClientArea","uint",hGuiA,"uint",&rect0)
 } return,
 
-;+e::
-
+;~+4::
 DataEntryWindow:
 gui_W:=300, gui_H:=138
-WS_POPUP = 0x80000000, WS_CHILD = 0x40000000
+WS_POPUP := 0x80000000, WS_CHILD := 0x40000000
 
 Gui,1:+LastFound +hWndhGui1 +Owner +AlwaysOnTop +hwndghwnd +0x40000 -0x400000
 Gui,1:Color,181535
-;WinSet, TransColor, 000000, % "ahk_id " hGui1
 ;Gui, 1: Add, Picture, w300 h165 x0 y0 AltSubmit BackgroundTrans, %A_ScriptDir%\Ressources\grey.png
 Gui,1:Font,s11 bold,Segoe UI
 Parent_ID := WinExist()
 Gui,2:Font,s11 bold,Segoe UI ;Gui, 2:margin,1,1
 Gui,2:-Caption +hWndhGui2 +%WS_CHILD% -%WS_POPUP%
 gui,2:Color,000000,000000
-;WinSet,TransColor,000000,% "ahk_id " hGui2
 Gui,2:Font,s11 bold, Segoe UI
-Gui,2:Add,Edit,x15 y+50 r1 w270 Limit51 +hwndApiEntryEditHwnd Password vPassword
-gui,1:Add,Picture,X0 Y0 BackgroundTrans,% "C:\Script\AHK\GDI\images\glass.png"
+Gui,2:Add,Edit,x15 y+50 r1 w270 Limit51 +hwndAPIEntryEdithWnd Password vPassword
+gui,1:Add,Picture,X0 Y0 BackgroundTrans,% a_scriptdir "\glass.png"
 Gui,2:Add,Button, y+15 x205 w80 h30 gapiSubmitKey Default,Submit
 Gui,2:+LastFound
-Child_ID := WinExist() 
+Child_ID := WinExist()
 DllCall("SetParent","uint",Child_ID,"uint",Parent_ID)
 Gui,2:Add,Text,vtext1 %opt_gui_fontcol% w270 x17 y17 AltSubmit,% "Please enter API Key:"
 OnMessage(0x6,"col")
@@ -298,10 +301,11 @@ Gui,2: Show, x0 y0 w300 h135,no_glass
 Gui,1: hide
 
 dBlur(ghwnd)
+
 win_move(ghwnd,A_screenwidth*.5-gui_W,A_screenheight*.5-gui_H,"","","")
 Win_Animate(ghwnd,"hneg slide",200)
 winactivate,ahk_id %ghwnd%
-GuiControl, Focus,% apientryedithwnd
+GuiControl,Focus,% APIEntryEdithWnd
 return,
 
 apiSubmitKey:
@@ -320,7 +324,7 @@ if(result="Bad") {
 
 col() {
 	static go:= !false
-	go:= winactive(ghwnd)? true : false 
+	go:= winactive(ghwnd)? true : false
 	(go? (col:=181535,col2:="c220040", col3:="c99aafe") :  (col:= 050513, col2:= "c200570", col3:="c6688aff"))
 	Gui, 1: Color,%col%
 	Gui, 1: Font,%col2%
@@ -331,18 +335,11 @@ col() {
 
 ;-=====================================================================================================================================
 
-OnMessages:
-onexit,exit
-onmessage(0x201,"WM_LBUTTDOWNUP")
-;onmessage(0x202,"WM_LBUTTDOWNUP")
-OnMessage(0x6,"onActiv8")
-OnMessage(0x404,"AHK_NOTIFYICON")
-return,
 
 StatusBarInit:
 init:= 0, inc:= Opt_Gui_Main_W -38
 (init=0? Eye48_hIcon:= b64_2_hicon(icoB64["Eye48"]))
-Gui,Add,StatusBar,% "+hWndSbarhWnd +e0x2000000 " 
+Gui,Add,StatusBar,% "+hWndSbarhWnd +e0x2000000 "
 SB_SetParts(inc,100)
 SendMessage,0x40F,0,% Eye48_hIcon,,ahk_id %SbarhWnd%
 return,
@@ -371,12 +368,26 @@ ButtonClick:
 Gui,Submit,NoHide
 GuiControl,% AnswerHeadingHwnd,show
 Gui,PleaseWait:Show,% "x300 y" (A_ScreenHeight/2), % AttemptNo
-AttemptNo := 1
-jsonY := thisJson(InputQuestion)
-; Send the request and get the response
+AttemptNo:= 1
 
-curl.Send(jsonY)
-result := curl.ResponseText
+api_url:= "https://api.openai.com/v1/engines/text-davinci-003/completions"
+	; Set up whttpr session.
+try,{
+	whttpr:= ComObjCreate("WinHttp.WinHttpRequest.5.1")
+	whttpr.Open("POST", api_url)
+	whttpr.SetRequestHeader("Content-Type","application/json")
+	whttpr.SetRequestHeader("Authorization","Bearer " api_key)
+	; Prepare JSON payload.
+	jsonY =
+}
+
+jsonY:= thisJson(InputQuestion)
+if(Opt_DebugPayload)
+	msgbox,% jsonY ; for debug purposes
+
+; Send the request and get the response
+whttpr.Send(jsonY)
+result := whttpr.ResponseText
 test := result
 ;msgbox,, % "A_LineNumber. " A_LineNumber " - isObject", % isObject(result) ;msgbox,, % "A_LineNumber. " A_LineNumber " - result", % result
 
@@ -385,10 +396,11 @@ If test contains error
 	AttemptNo++
 	GuiControl,,AnswerEdit2,% "error"
 	fileappend,% error "`n",% a_scriptdir "\chatGPT UI - mini - error A.txt"
-	msgbox,,% "A_LineNumber. " A_LineNumber " - error A", % test,5
+	msgbox,,% "A_LineNumber. " A_LineNumber " - error A", % test,62
+	;exitapp
 	sleep,1000
-	GuiControl,PleaseWait:,TextB,% AttemptNo
-	GoTo,ButtonClick
+;	GuiControl,PleaseWait:,TextB,% AttemptNo
+	;GoTo,ButtonClick
 }
 
 If test =
@@ -397,9 +409,9 @@ If test =
 	GuiControl,,AnswerEdit2, error
 	fileappend,% error "`n", % a_scriptdir "\chatGPT UI - mini - error B.txt"
 	msgbox,,% "A_LineNumber. " A_LineNumber " - error B", % test,5
-	sleep,1000
-	GuiControl, PleaseWait:, TextB, % AttemptNo
-	GoTo, ButtonClick
+	;sleep,1000
+	;GuiControl, PleaseWait:, TextB, % AttemptNo
+	;GoTo, ButtonClick
 }
 
 Array:= [] ;Array := JSON.Load(result)
@@ -441,13 +453,11 @@ Answer:= StrReplace(Answer,"Â°",			"°") ; 100°C 100 Degrees
 	for,key,val in arr
 		StrReplace(Answer, key, val)
 
-if(Answer)
-	GuiControl,,AnswerEdit,% Answer
-else,GuiControl,,AnswerEdit,% Result
+GuiControl,,AnswerEdit,% Answer? Answer : Result
 
-;  GuiControl, -Redraw, PleaseWait
+; GuiControl,-Redraw,PleaseWait
 
-GuiControl,, AnswerEdit2, % Answer
+GuiControl,, AnswerEdit2,% Answer
 
 try,thisBeautifyJson:= BeautifyJson(Result)
 GuiControl,,ResultEdit,% thisBeautifyJson
@@ -463,18 +473,17 @@ thisAPI_total_tokens      := Array["usage", "total_tokens"]
 thisAPI_created		  := Array["created"] ; "`t"
 
    time := 1970
-   time += thisAPI_created, s
-   diff -= A_NowUTC, h
-   time += diff, h
-   FormatTime, TimeStamp, %time%, dd.MM.yyyy HH-mm-ss tt  ; 24.März.2018 05-20-37
+   ,time += thisAPI_created, s
+   , diff -= A_NowUTC, h
+   , time += diff, h
+   FormatTime,TimeStamp,%time%,dd.MM.yyyy HH-mm-ss tt  ; 24.März.2018 05-20-37
 
-GuiControl,, TextApiKey, % "[ " thisAPI_total_tokens " ]   " TimeStamp
+   GuiControl,,TextApiKey,% "[ " thisAPI_total_tokens " ]   " TimeStamp
 
-    thisLV_ADD := InputQuestion "`t"
+   thisLV_ADD:= InputQuestion "`t"
  		. Answer "`t"
  		. Answer2 "`t"
-fileappend, % thisLV_ADD "`n", % a_scriptdir "\chatGPT UI - mini - history.txt"
-
+		  fileappend, % thisLV_ADD "`n", % a_scriptdir "\chatGPT UI - mini - history.txt"
       this_ADD := InputQuestion "`t"
  		. Answer "`t"
  		. Answer2 "`t"
@@ -489,11 +498,11 @@ fileappend, % thisLV_ADD "`n", % a_scriptdir "\chatGPT UI - mini - history.txt"
  		. Array["usage", "completion_tokens"] "`t"
  		. Array["usage", "prompt_tokens"] "`t"
  		. Array["usage", "total_tokens"] "`n"
-fileappend,% thisLV_ADD "`n",% a_scriptdir "\chatGPT UI - mini - history-FULL.txt"
+      fileappend,% thisLV_ADD "`n",% a_scriptdir "\chatGPT UI - mini - history-FULL.txt"
       this_LV_Line:= InputQuestion "`t"
- 		    . Answer "`t"
- 		    . Answer2 "`n"
-fileappend,% this_LV_Line "`n", % a_scriptdir "\chatGPT UI - mini - this_LV_Line.txt"
+    . Answer "`t"
+ 		. Answer2 "`n"
+		fileappend,% this_LV_Line "`n", % a_scriptdir "\chatGPT UI - mini - this_LV_Line.txt"
 return,
 
 ReloadApp:
@@ -513,8 +522,8 @@ GuiEscape:
 settimer,HideMainGui,-10
 return,
 
-;json = {"ItemN": 625, "Digital": ["", "", {"key": "value"}], "LocalDel": "Check"}
-;ahkObj := JsonToAHK(json) ;MsgBox, % ahkObj["Digital", 3, "key"]
+; json = {"ItemN": 625, "Digital": ["", "", {"key": "value"}], "LocalDel": "Check"}
+; ahkObj := JsonToAHK(json) ;MsgBox, % ahkObj["Digital", 3, "key"]
 
 JsonToAHK(json, rec:= False) {
 	static doc:= ComObjCreate("htmlfile")
@@ -535,22 +544,38 @@ JsonToAHK(json, rec:= False) {
 				k:= keys[A_Index -1]
 				obj[k]:= %A_ThisFunc%(json[k], True)
 		}
-	}
-	Return,obj
+	}	Return,obj
 }
+ 
+thisJson(ByRef Search_Input:= "Hello") { ; Build the JSON payload
+msgbox %  instr(Search_Input,chr(9))
+	(instr(Search_Input,"\")? Search_Input:= strreplace(Search_Input,"\","\\"))  ;backslash escape char in JSON
+	(instr(Search_Input,"/")? Search_Input:= strreplace(Search_Input,"/","//"))  ;fwdslash escape char in JSON
+	(instr(Search_Input,chr(9))? Search_Input:= strreplace(Search_Input,chr(9)," "))  ;fwdslash escape char in JSON
+	msgbox %  instr(Search_Input,chr(9))
 
-thisJson(ByRef Search_Input := "PROMPT") { ; Build the JSON payload
- 	Search_Input:= RegExReplace(Search_Input:= RegExReplace(Search_Input,"\""",""""""),"\n","``n")
- 	jsonY=
-	(
-   {
-     "prompt": "%Search_Input%",
-     "max_tokens": %Opt_MaxTokens%,
-     "temperature": %Opt_Temeperature%
-   }
-	)
-	Return,jsonY
+	Search_Input:= RegExReplace(Search_Input,"`n","\n") ; newline chars
+	Search_Input:= RegExReplace(Search_Input,"`" chr(34),"\" chr(34)) ;doublequote mark
+	Search_Input:= RegExReplace(Search_Input, chr(126),"\" chr(126)) ;tilde
+	MaxTokens:= round((Opt_MaxTokens/2)-(len:= strlen(Search_Input)))
+	if(Opt_DebugPayload)
+		msgbox % Search_Input
+	jsonY:= "
+(LTrim
+{
+ ""prompt"": " chr(34) Search_Input chr(34) ",
+ ""max_tokens"": " MaxTokens ",
+ ""temperature"": " Opt_Temperature "
 }
+)"
+	Return,byref jsonY
+}While(i< 100) { ; ToolTip,% i ;
+	setTimer,ttStop,-3000
+	Answer:= Array["choices"][i]["text"]
+	If(Answer!="")
+		Break,
+	i++
+} 
 
 BeautifyJson(json, indent := "    ") {
 	static Doc, JS
@@ -642,7 +667,7 @@ GetJScript() {
 				var b = 1526272306;
 				return 406398 + '.' + (a + b);
 			})());
-	
+
 			function b(a, b) {
 				for (var d = 0; d < b.length - 2; d += 3) {
 						var c = b.charAt(d + 2),
@@ -652,7 +677,7 @@ GetJScript() {
 				}
 				return a
 			}
-	
+
 			function tk(a) {
 					for (var e = TKK.split("."), h = Number(e[0]) || 0, g = [], d = 0, f = 0; f < a.length; f++) {
 							var c = a.charCodeAt(f);
@@ -669,7 +694,7 @@ GetJScript() {
 					return a.toString() + "." + (a ^ h)
 			}
 		)
-		Return script
+		Return,script
 }
 
 CreateScriptObj() {
@@ -731,6 +756,11 @@ gosub,RegWrite
 gosub,unhook
 ExitApp,
 
+reload() {
+	reload,
+	exitapp,
+}
+
 unHook:
 if(FileExist(TEMP_FILE))
 	FileDelete,%TEMP_FILE%
@@ -742,15 +772,6 @@ loop,Parse,% hOOkz,`,
 	dllcall("GlobalFree",    "Ptr",a_loopfield,"Ptr")
 	(%a_loopfield%) := ""
 } return,
-
-onActiv8(wparam="",lparam="",msg="",hwnd="") {
-	local static smicon:= b64_2_hicon(icoB64["smicon64"])
-	, lgicon:= b64_2_hicon(icoB64["lgicon64"])
-	,large:=1, small:=0, m:= 0x80
-	SendMessage,m,small,smicon,,ahk_id %hWnd% ;WM_SETICON,ICON_SMALL
-	SendMessage,m,large,lgicon,,ahk_id %hWnd% ;WM_SETICON,ICON_LARGE
-	Return,ErrorLevel
-}
 
 dBlur(hWnd) {
 	static WCA_ACCENT_POLICY := 19
@@ -910,20 +931,17 @@ AHK_NOTIFYICON(byref wParam="", byref lParam="") {
 	}	return,
 }
 
-reload() {
-	reload,
-	exitapp,
-}
-
 Varz:
-global r_pid, tabcontrolhwnd, password, copiedthis, api_key, AnswerEdithwnd, InputQuestion, InputQuestionhwnd, Opt_GUI_Answer_W, RegBase, Opt_Gui_Main_W, xs, ys, smicon64, lgicon64, ApiEntryEditHwnd, Opt_MultiLang, Opt_Tokens, Opt_SpawnOnMouse, opt_GuiTabMarginSz, Opt_MaxTokens, Opt_Appear_Transition, Opt_Appear_TransitionDurMs, Opt_Gui_Question_W, Opt_GuiQuestionLines, Opt_Hide_Transition, opt_GuiTabTopMargin, Opt_Hide_TransitionDurMs, Opt_Guitab_W, EDIT:= 65304, open:= 65407, Suspend:= 65305, PAUSE:= 65306, exit:= 6530, SbarhWnd, Opt_Temeperature, Opt_GuiTrans, hGuiA, MattTheme, Opt_Hide_TransitionS, Opt_Hide_TransitionN, Opt_Appear_TransitionS, opt_gui_fontcol, Opt_Appear_TransitionN, Opt_GUI_Answer_H, AnswerEdithwnd2, AnswerEdithwnd, gui_W, gui_H
+global r_pid, tabcontrolhwnd, MattTheme, password, copiedthis, api_key, AnswerEdithwnd, InputQuestion, InputQuestionhwnd, Opt_GUI_Answer_W, RegBase, Opt_Gui_Main_W, xs, ys, smicon64, lgicon64, APIEntryEdithWnd, Opt_MultiLang, Opt_Tokens, Opt_SpawnOnMouse, opt_GuiTabMarginSz, Opt_MaxTokens, Opt_Appear_Transition, Opt_Appear_TransitionDurMs, Opt_Gui_Question_W, Opt_GuiQuestionLines, Opt_Hide_Transition, opt_GuiTabTopMargin, Opt_Hide_TransitionDurMs, Opt_Guitab_W, EDIT:= 65304, open:= 65407, Suspend:= 65305, PAUSE:= 65306, exit:= 6530, SbarhWnd, Opt_Temperature, Opt_GuiTrans, hGuiA, MattTheme, Opt_Hide_TransitionS, Opt_Hide_TransitionN, Opt_Appear_TransitionS, opt_gui_fontcol, Opt_Appear_TransitionN, Opt_GUI_Answer_H, AnswerEdithwnd2, AnswerEdithwnd, gui_W, gui_H
 
 , r_pid:= DllCall("GetCurrentProcessId"), hOOkz
 
 , icoB64:= []
 
 RegBase:= "HKEY_CURRENT_USER\SOFTWARE\_ch@_GP-Tizzle"
+
 gosub,b64icons_
+
 return,
 
 B64icons_:
