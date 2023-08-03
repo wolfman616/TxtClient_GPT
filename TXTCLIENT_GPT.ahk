@@ -548,11 +548,9 @@ JsonToAHK(json, rec:= False) {
 }
  
 thisJson(ByRef Search_Input:= "Hello") { ; Build the JSON payload
-msgbox %  instr(Search_Input,chr(9))
 	(instr(Search_Input,"\")? Search_Input:= strreplace(Search_Input,"\","\\"))  ;backslash escape char in JSON
 	(instr(Search_Input,"/")? Search_Input:= strreplace(Search_Input,"/","//"))  ;fwdslash escape char in JSON
 	(instr(Search_Input,chr(9))? Search_Input:= strreplace(Search_Input,chr(9)," "))  ;fwdslash escape char in JSON
-	msgbox %  instr(Search_Input,chr(9))
 
 	Search_Input:= RegExReplace(Search_Input,"`n","\n") ; newline chars
 	Search_Input:= RegExReplace(Search_Input,"`" chr(34),"\" chr(34)) ;doublequote mark
