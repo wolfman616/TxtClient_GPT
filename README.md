@@ -13,3 +13,7 @@ A simple selfcontained windows common controls gui frontend for chatGPT
 ![image](https://github.com/wolfman616/TxtClient_GPT/assets/62726599/49460a66-2958-4ae7-b59c-41a7487daad0)
 
 ![image](https://github.com/wolfman616/TxtClient_GPT/assets/62726599/f3c6dfd7-d886-4906-8ef6-fd5a7668f8fe)
+
+should now accept long string of code etc correctly,
+
+maxtokens is adjusted to half the string length before subtracting from maxtokens as i was getting some errors.
