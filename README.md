@@ -3,6 +3,8 @@ A simple selfcontained windows common controls gui frontend for chatGPT
 
 Now supports chatgpt_3.5_turbo and davinci003 models.
 
+Major cost is chat history is not working properly and not documented, i have attempted to reverse engineer the payload unsucesdfully so far.
+
 to do, add ability to launch test script received from chatGPT filelessly through a named pipe.
 
 <img width="344" alt="Clipboarder 2023 07 31-004" src="https://github.com/wolfman616/TxtClient_GPT/assets/62726599/860bc1b5-8dc1-4b12-befc-6a986a09682c"> <img src="https://i.imgur.com/n6BMwLa.gif">
